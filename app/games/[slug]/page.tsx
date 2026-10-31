@@ -1,0 +1,3 @@
+import {games} from '@/lib/games'; import {notFound} from 'next/navigation'; import Game from '@/components/Game';
+export function generateStaticParams(){return games.map(g=>({slug:g.slug}))}
+export default async function Page({params}:{params:Promise<{slug:string}>}){const {slug}=await params;const game=games.find(g=>g.slug===slug);if(!game)notFound();return <main className="wrap gamepage"><a href="/#games" className="back">← ALL GAMES</a><div className="gamehead"><div><div className="eyebrow">{game.category} · FREE TO PLAY</div><h1>{game.title}</h1><p>{game.description}</p></div><span>{game.emoji}</span></div><Game slug={slug} title={game.title}/><p className="tip">Tip: Your personal best is saved in this browser. Try again to beat it!</p></main>}

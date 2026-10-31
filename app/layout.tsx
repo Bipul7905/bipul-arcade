@@ -1,0 +1,3 @@
+import './globals.css'; import Link from 'next/link';
+export const metadata={title:'Bipul Arcade — Free Online Games',description:'Play free browser arcade games at Bipul Arcade.'};
+export default function Layout({children}:{children:React.ReactNode}){return <html lang="en"><body><header className="nav"><Link className="logo" href="/">🎮 BIPUL <b>ARCADE</b></Link><nav><Link href="/">Home</Link><Link href="/#games">Games</Link></nav><Link className="navbtn" href="/#games">PLAY NOW ↗</Link></header>{children}<footer>© {new Date().getFullYear()} Bipul Arcade · Quick games. Big energy.</footer></body></html>}
