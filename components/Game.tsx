@@ -14,12 +14,51 @@ export default function Game({ slug, title }: { slug: string; title: string }) {
   const runnerRef = useRef(runner);
   const scoreRef = useRef(0);
   const bestRef = useRef(0);
+  const audioRef = useRef<AudioContext | null>(null);
+  const [soundOn, setSoundOn] = useState(true);
+
+  // Small synthesized arcade sound effects; no external audio files are required.
+  const playSound = (kind: 'start' | 'jump' | 'score' | 'hit' | 'toggle') => {
+    if (!soundOn) return;
+    try {
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContextClass) return;
+      const ctx = audioRef.current || new AudioContextClass();
+      audioRef.current = ctx;
+      if (ctx.state === 'suspended') void ctx.resume();
+
+      const now = ctx.currentTime;
+      const settings: Record<string, { frequency: number; endFrequency: number; duration: number; wave: OscillatorType; volume: number }> = {
+        start: { frequency: 440, endFrequency: 880, duration: 0.16, wave: 'sine', volume: 0.12 },
+        jump: { frequency: 520, endFrequency: 760, duration: 0.11, wave: 'triangle', volume: 0.09 },
+        score: { frequency: 880, endFrequency: 1180, duration: 0.075, wave: 'sine', volume: 0.055 },
+        hit: { frequency: 190, endFrequency: 55, duration: 0.28, wave: 'sawtooth', volume: 0.12 },
+        toggle: { frequency: 660, endFrequency: 660, duration: 0.07, wave: 'sine', volume: 0.06 }
+      };
+      const sound = settings[kind];
+      const oscillator = ctx.createOscillator();
+      const gain = ctx.createGain();
+      oscillator.type = sound.wave;
+      oscillator.frequency.setValueAtTime(sound.frequency, now);
+      oscillator.frequency.exponentialRampToValueAtTime(Math.max(1, sound.endFrequency), now + sound.duration);
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(sound.volume, now + 0.012);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + sound.duration);
+      oscillator.connect(gain);
+      gain.connect(ctx.destination);
+      oscillator.start(now);
+      oscillator.stop(now + sound.duration + 0.015);
+    } catch {
+      // Sound is optional; gameplay should continue if audio is unavailable.
+    }
+  };
 
   useEffect(() => { const saved = +(localStorage.getItem('ba-' + slug) || 0); B(saved); bestRef.current = saved; }, [slug]);
   useEffect(() => { runnerRef.current = runner; }, [runner]);
   useEffect(() => { scoreRef.current = score; }, [score]);
 
   const end = (n: number) => {
+    playSound('hit');
     S(n); P(false);
     if (n > bestRef.current) { B(n); bestRef.current = n; localStorage.setItem('ba-' + slug, '' + n); M('NEW PERSONAL BEST! 🎉'); }
     else M('Nice try — one more round?');
@@ -27,6 +66,7 @@ export default function Game({ slug, title }: { slug: string; title: string }) {
   };
 
   const start = () => {
+    playSound('start');
     S(0); scoreRef.current = 0; P(true); M('Game on!');
     let d: any = {};
     if (slug === 'memory-match') d.cards = [...icons, ...icons].sort(() => Math.random() - .5);
@@ -44,7 +84,7 @@ export default function Game({ slug, title }: { slug: string; title: string }) {
   const jump = () => {
     if (!playing || slug !== '99-fail') return;
     const r = runnerRef.current;
-    if (r.alive && r.y >= -2) setRunner(old => ({ ...old, vy: -14.2 }));
+    if (r.alive && r.y >= -2) { playSound('jump'); setRunner(old => ({ ...old, vy: -14.2 })); }
   };
 
   const act = (v: number = 0) => {
@@ -96,7 +136,11 @@ export default function Game({ slug, title }: { slug: string; title: string }) {
           window.setTimeout(() => end(scoreRef.current), 0);
           return { ...prev, y, vy: groundedVy, obstacles, alive: false, ticks };
         }
-        if (ticks % 3 === 0) S(s => { scoreRef.current = s + 1; return s + 1; });
+        if (ticks % 3 === 0) S(s => {
+          scoreRef.current = s + 1;
+          if ((s + 1) % 10 === 0) playSound('score');
+          return s + 1;
+        });
         return { y, vy: groundedVy, obstacles, alive: true, ticks };
       });
     }, 30);
@@ -121,7 +165,7 @@ export default function Game({ slug, title }: { slug: string; title: string }) {
   });
 
   return <div className="gamebox">
-    <div className="scorebar"><span>SCORE <b>{score}</b></span><span>BEST <b>{best}</b></span><button onClick={start}>↻ RESTART</button></div>
+    <div className="scorebar"><span>SCORE <b>{score}</b></span><span>BEST <b>{best}</b></span><button onClick={() => { setSoundOn(v => !v); playSound('toggle'); }} aria-label={soundOn ? 'Mute sound' : 'Enable sound'}>{soundOn ? '🔊 SOUND ON' : '🔇 SOUND OFF'}</button><button onClick={start}>↻ RESTART</button></div>
     <div className="board" onClick={slug === '99-fail' && playing ? jump : undefined}>
       {!playing ? <div className="ready"><div>🕹️</div><h2>{msg}</h2><p>{title} · Personal best {best}</p><button className="btn" onClick={start}>START GAME →</button></div> : <>
         {slug === '99-fail' ? <div className="runner-scene" style={{ width: '100%', maxWidth: 760, height: 330, margin: 'auto', position: 'relative', overflow: 'hidden', borderRadius: 22, isolation: 'isolate', background: 'linear-gradient(180deg,#66c9ff 0%,#b9e9ff 48%,#e7f8ff 70%,#9cdb78 70%,#438d48 100%)', border: '1px solid #ffffffaa', boxShadow: 'inset 0 -12px 30px #174b3455, 0 18px 40px #163a5933', touchAction: 'manipulation' }}>
